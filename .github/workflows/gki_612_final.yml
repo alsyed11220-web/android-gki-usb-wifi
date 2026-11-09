@@ -1,0 +1,53 @@
+name: GKI 6.12 WiFi Kernel Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Official Build Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc binfmt-support clang lld llvm python3
+
+    - name: Clone Official Google Android 16 Kernel
+      run: |
+        SERVER="https://android.googlesource.com"
+        PATH_REPO="/kernel/common"
+        git clone --depth=1 -b android16-6.12 "${SERVER}${PATH_REPO}" /home/runner/common
+
+    - name: Configure and Inject WiFi Drivers
+      run: |
+        cd /home/runner/common
+        make ARCH=arm64 LLVM=1 defconfig
+        scripts/config --enable CFG80211
+        scripts/config --enable MAC80211
+        scripts/config --enable NL80211_TESTMODE
+        scripts/config --enable CFG80211_CERTIFICATION_ONUS
+        scripts/config --enable USB_NET_DRIVERS
+        scripts/config --enable RTL8188FU
+        scripts/config --enable RTL88XXAU
+        scripts/config --enable RTL8192CU
+        scripts/config --enable MT7601U
+        scripts/config --enable RT2X00
+        scripts/config --enable RT2800USB
+        scripts/config --enable ATH_COMMON
+        scripts/config --enable ATH9K_HTC
+        make ARCH=arm64 LLVM=1 olddefconfig
+
+    - name: Compile Kernel Image
+      run: |
+        cd /home/runner/common
+        make ARCH=arm64 LLVM=1 -j$(nproc) Image.gz
+
+    - name: Upload Compiled Image.gz
+      uses: actions/upload-artifact@v4
+      with:
+        name: Android16-WiFi-Image
+        path: /home/runner/common/arch/arm64/boot/Image.gz
