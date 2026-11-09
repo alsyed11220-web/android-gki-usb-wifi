@@ -1,0 +1,42 @@
+name: NetHunter GKI Pro Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Official Build Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc binfmt-support clang lld llvm
+
+    - name: Clone Android 16 GKI Kernel
+      run: |
+        HOST="https://github"
+        ORG="aosp-mirror"
+        REPO="kernel_common.git"
+        git clone --depth=1 -b common-android16-6.12 "${HOST}.com/${ORG}/${REPO}" /home/runner/common
+
+    - name: Inject Custom Wireless Settings
+      run: |
+        cd /home/runner/common
+        make ARCH=arm64 LLVM=1 gki_defconfig
+        printf "\nCONFIG_CFG80211=y\nCONFIG_MAC80211=y\nCONFIG_NL80211_TESTMODE=y\nCONFIG_CFG80211_CERTIFICATION_ONUS=y\nCONFIG_RTL8188FU=y\nCONFIG_RTL88XXAU=y\nCONFIG_RTL8192CU=y\nCONFIG_MT7601U=y\nCONFIG_RT2X00=y\nCONFIG_RT2800USB=y\nCONFIG_ATH_COMMON=y\nCONFIG_ATH9K_HTC=y\n" >> arch/arm64/configs/gki_defconfig
+
+    - name: Compile GKI Kernel Image
+      run: |
+        cd /home/runner/common
+        make ARCH=arm64 LLVM=1 gki_defconfig
+        make ARCH=arm64 LLVM=1 -j$(nproc) Image.gz
+
+    - name: Upload Compiled Image.gz
+      uses: actions/upload-artifact@v4
+      with:
+        name: NetHunter-GKI-Image
+        path: /home/runner/common/arch/arm64/boot/Image.gz
